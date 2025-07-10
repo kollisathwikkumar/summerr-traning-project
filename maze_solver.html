@@ -1,0 +1,211 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html>
+<head>
+    <title>Maze Solver - Path Counter (JavaScript)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+        }
+        .controls {
+            margin: 20px;
+        }
+        .maze {
+            display: grid;
+            gap: 1px;
+            background-color: #000;
+        }
+        .cell {
+            width: 30px;
+            height: 30px;
+            background-color: #fff;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: #000;
+        }
+        .wall {
+            background-color: #000;
+        }
+        .path {
+            background-color: #00ff00;
+        }
+        button {
+            margin: 5px;
+            padding: 5px 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Maze Solver - Path Counter (JavaScript)</h1>
+    <div class="controls">
+        <label for="size">Maze Size (n): </label>
+        <select id="size" onchange="generateMaze()">
+            <option value="4">4x4</option>
+            <option value="5">5x5</option>
+            <option value="10">10x10</option>
+            <option value="15">15x15</option>
+        </select>
+        <button onclick="generateMaze()">Generate Maze</button>
+        <button onclick="resetMaze()">Reset Maze</button>
+    </div>
+    <div id="maze" class="maze"></div>
+    <div class="controls">
+        <button onclick="solveMaze()">Solve Maze</button>
+        <button onclick="showPathCount()">Show Path Count</button>
+    </div>
+    <p>Maze generated. Click cells to add/remove walls, then solve or show path count. 'S' is start, 'E' is end.</p>
+
+    <script>
+        let maze = [];
+        let size = 4;
+        let cells = [];
+
+        function generateMaze() {
+            size = parseInt(document.getElementById('size').value);
+            maze = Array(size).fill().map(() => Array(size).fill(false));
+            renderMaze();
+        }
+
+        function resetMaze() {
+            maze = Array(size).fill().map(() => Array(size).fill(false));
+            renderMaze();
+        }
+
+        function renderMaze() {
+            const mazeDiv = document.getElementById('maze');
+            mazeDiv.innerHTML = '';
+            mazeDiv.style.gridTemplateColumns = `repeat(${size}, 30px)`;
+            cells = [];
+            for (let i = 0; i < size; i++) {
+                for (let j = 0; j < size; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+                    if (i === 0 && j === 0) cell.textContent = 'S';
+                    else if (i === size - 1 && j === size - 1) cell.textContent = 'E';
+                    cell.onclick = () => toggleWall(i, j);
+                    if (maze[i][j]) cell.classList.add('wall');
+                    mazeDiv.appendChild(cell);
+                    cells.push(cell);
+                }
+            }
+        }
+
+        function toggleWall(i, j) {
+            if (i === 0 && j === 0 || i === size - 1 && j === size - 1) return; // Prevent changing start/end
+            maze[i][j] = !maze[i][j];
+            renderMaze();
+        }
+
+        function solveMaze() {
+            const visited = Array(size).fill().map(() => Array(size).fill(false));
+            const path = [];
+            if (dfs(0, 0, visited, path)) {
+                renderMaze();
+                for (let [i, j] of path) {
+                    if (i === 0 && j === 0 || i === size - 1 && j === size - 1) continue;
+                    cells[i * size + j].classList.add('path');
+                }
+            } else {
+                alert('No solution exists!');
+            }
+        }
+
+        function dfs(i, j, visited, path) {
+            if (i < 0 || i >= size || j < 0 || j >= size || maze[i][j] || visited[i][j]) return false;
+            if (i === size - 1 && j === size - 1) {
+                path.push([i, j]);
+                return true;
+            }
+
+            visited[i][j] = true;
+            path.push([i, j]);
+
+            if (dfs(i + 1, j, visited, path) ||
+                dfs(i - 1, j, visited, path) ||
+                dfs(i, j + 1, visited, path) ||
+                dfs(i, j - 1, visited, path)) {
+                return true;
+            }
+
+            path.pop();
+            return false;
+        }
+
+        function showPathCount() {
+            const visited = Array(size).fill().map(() => Array(size).fill(false));
+            const count = countPaths(0, 0, visited);
+            alert(`Number of paths from S to E: ${count}`);
+            console.log(`Path count at (0,0): ${count}`);
+        }
+
+        function countPaths(i, j, visited) {
+            if (i < 0 || i >= size || j < 0 || j >= size || maze[i][j] || visited[i][j]) return 0;
+            if (i === size - 1 && j === size - 1) {
+                console.log(`Reached end at (${i}, ${j})`);
+                return 1;
+            }
+
+            visited[i][j] = true;
+            let count = 0;
+            const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]]; // Down, Up, Right, Left
+            for (let [di, dj] of directions) {
+                count += countPaths(i + di, j + dj, visited.map(row => [...row]));
+            }
+            visited[i][j] = false;
+
+            return count;
+        }
+
+        // Initial maze generation
+        generateMaze();
+    </script>
+</body>
+</html>
